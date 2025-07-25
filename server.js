@@ -50,7 +50,7 @@ app.post('/token', (req, res) => {
   if (!token) return res.sendStatus(401);
   if (!refreshTokens.includes(token)) return res.sendStatus(403);
 
-  jwt.verify(token, process.env.REFRESH_TOKEN, (err, user) => {
+  jwt.verify(token, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
     const accessToken = generateAccessToken({ username: user.username });
     res.json({ accessToken })
@@ -69,7 +69,7 @@ function authenticateToken(req, res, next) {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.ACCESS_TOKEN, (err, user) => {
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
     req.user = user;
     next();
