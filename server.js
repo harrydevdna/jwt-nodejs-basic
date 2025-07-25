@@ -8,6 +8,7 @@ const port = 3000;
 const app = express();
 app.use(express.json());
 
+let accessTokenBlacklist = [];
 let refreshTokens = [];
 
 const posts = [
@@ -41,25 +42,33 @@ app.post('/login', (req, res) => {
   const refreshToken = generateRefreshToken(user);
 
   refreshTokens.push(refreshToken);
-  res.json({ accessToken, refreshToken })
+  res.json({ accessToken, refreshToken });
 })
 
 // Regenerate access token from refresh token
 app.post('/token', (req, res) => {
-  const { token } = req.body;
-  if (!token) return res.sendStatus(401);
-  if (!refreshTokens.includes(token)) return res.sendStatus(403);
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.sendStatus(401);
+  if (!refreshTokens.includes(refreshToken)) return res.sendStatus(403);
 
-  jwt.verify(token, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
+  jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
+
+    refreshTokens = refreshTokens.filter(currentRefreshToken => currentRefreshToken !== refreshToken);
+
     const accessToken = generateAccessToken({ username: user.username });
-    res.json({ accessToken })
+    const newRefreshToken = generateRefreshToken({ username: user.username });
+
+    refreshTokens.push(newRefreshToken);
+
+    res.json({ accessToken, refreshToken: newRefreshToken });
   })
 })
 
 app.delete('/logout', (req, res) => {
-  const { token } = req.body;
-  refreshTokens = refreshTokens.filter(refreshToken => refreshToken !== token);
+  const { accessToken, refreshToken } = req.body;
+  refreshTokens = refreshTokens.filter(currentRefreshToken => currentRefreshToken !== refreshToken);
+  accessTokenBlacklist.push(accessToken);
   res.sendStatus(204);
 })
 
@@ -69,6 +78,9 @@ function authenticateToken(req, res, next) {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
+  if (accessTokenBlacklist.includes(token)) {
+    return res.sendStatus(403);
+  }
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
     if (err) return res.sendStatus(403);
     req.user = user;
